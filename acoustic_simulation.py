@@ -3,7 +3,8 @@
 """
 
 import numpy as np
-from scipy.signal import convolve2d
+from scipy.signal import convolve2d, fftconvolve
+import time
 
 
 def attenuation_border_matrix(nz, nx, pad=20, factor=0.015):
@@ -110,22 +111,17 @@ def simulate_2d_wave_equation(velocity, dz, dx, dt, nt, sources, sz, sx, pad=20,
     f1x = 1.0/12.0/dx**2
     f2x = 4.0/3.0/dx**2
     ft = 2.5/dx**2 + 2.5/dz**2
+
+    # operatorx = np.array([-f1x, f2x, -ft, f2x, -f1x])
+    # operatorz = np.array([-f1z, f2z, -ft, f2z, -f1z])
+    # operator = np.zeros((5, 5))
+    # operator[:, 2] = operatorx
+    # operator[2, :] = operatorz
     
     pseudo_wave_field = np.zeros((3,) + sim_v.shape, dtype=float)
     # wave_field = np.empty((nt//skip,) + velocity.shape)
     wave_field = np.empty((nt//skip,) + sim_v.shape)
-
-    # operator = np.zeros((5, 5), dtype=float)
-    # operator[0, 2] = -f1z
-    # operator[1, 2] = f2z
-    # operator[2, 2] = ft
-    # operator[3, 2] = f2z
-    # operator[4, 2] = -f1z
-    # operator[2, 0] = -f1x
-    # operator[2, 1] = f2x
-    # operator[2, 3] = f2x
-    # operator[2, 4] = -f1x
-
+    t0 = time.clock()
     for i in range(nt):
         i0 = (i + 2) % 3
         i1 = (i + 1) % 3
@@ -143,7 +139,7 @@ def simulate_2d_wave_equation(velocity, dz, dx, dt, nt, sources, sz, sx, pad=20,
         pseudo_wave_field[i0, :, 1:] += f2x*pseudo_wave_field[i1, :, :-1]
         pseudo_wave_field[i0, :, 2:] -= f1x*pseudo_wave_field[i1, :, :-2]
 
-        # pseudo_wave_field[i0] = convolve2d(pseudo_wave_field[i1], operator, mode="same")
+        # pseudo_wave_field[i0] = fftconvolve(pseudo_wave_field[i1], operator, "same")
 
         for source, sz_, sx_ in zip(sources, sz, sx):
             pseudo_wave_field[i0, sz_, sx_+total_pad] += source[i]
@@ -162,11 +158,15 @@ def simulate_2d_wave_equation(velocity, dz, dx, dt, nt, sources, sz, sx, pad=20,
         #     plt.imshow(pseudo_wave_field[i0, 27:58, 0:31]*abm[27:58, 0:31], vmin=-0.0005, vmax=0.0005, interpolation="none")
 
         pseudo_wave_field[i0] *= abm
+        # pseudo_wave_field[i1] *= abm
+        # pseudo_wave_field[i2] *= abm
 
         if i % skip == 0:
-            print("{}%".format(100.0*i/nt))
             # wave_field[i//skip] = pseudo_wave_field[i0, :-total_pad, total_pad:-total_pad]
             wave_field[i//skip] = pseudo_wave_field[i0]
+            t1 = time.clock()
+            print("{}% - Time elapsed: {}".format(100.0*i/nt, t1 - t0))
+            t0 = t1
     print("100.0%")
     # plt.show()
     return wave_field
@@ -231,6 +231,8 @@ def simulate_1d_wave_equation(velocity, dx, dt, nt, sources, sx, skip=1):
 
     operator = np.array([-f1x, f2x, -ft, f2x, -f1x])
 
+    t0 = time.clock()
+
     for i in range(nt):
         i0 = (i + 2) % 3
         i1 = (i + 1) % 3
@@ -253,9 +255,11 @@ def simulate_1d_wave_equation(velocity, dx, dt, nt, sources, sx, skip=1):
         pseudo_wave_field[i0] += 2.0*pseudo_wave_field[i1] - pseudo_wave_field[i2]
 
         if i % skip == 0:
-            print("{}%".format(100.0*i/nt))
             wave_field[i//skip] = pseudo_wave_field[i0, total_pad:-total_pad]
             # wave_field[i//skip] = pseudo_wave_field[i0]
+            t1 = time.clock()
+            print("{}% - Time elapsed: {}".format(100.0*i/nt, t1 - t0))
+            t0 = t1
     print("100.0%")
     # plt.show()
     return wave_field
@@ -298,8 +302,8 @@ if __name__ == "__main__":
     sz = [0]
     sx = [int((v.shape[0]-1)//2)]
 
-    pad = 20
-    factor = 0.015
+    pad = 100
+    factor = 0.0105
 
     t0 = time.clock()
     wave_field = simulate_2d_wave_equation(v, dz, dx, dt, nt, sources, sz, sx, pad, factor, skip)
